@@ -1,0 +1,47 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+env-mww/
+env-tts/
+venv/
+.venv/
+styletts2-ukrainian/env-tts/
+
+# ── Large generated data (не пушимо, відтворюються скриптами) ─────────────────
+augmentation_data/
+generated_samples/
+generated_augmented_features/
+
+# ── Логи тренування ──────────────────────────────────────────────────────────
+*.log
+training_run.log
+training_run_robust.log
+
+# ── Артефакти тренування (checkpoints, .h5, .tflite) ─────────────────────────
+# Залишаємо тільки фінальні .tflite і .json у trained_models/
+trained_models/wakeword_agent/
+trained_models/wakeword_agent_prev/
+trained_models/test_dry_run/
+
+# ── Артефакти IDE/OS ──────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+=2.18
+*.tmp
+*.bak

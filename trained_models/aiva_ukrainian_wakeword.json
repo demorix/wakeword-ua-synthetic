@@ -1,0 +1,34 @@
+{
+  "type": "microWakeWord",
+  "wake_word": "агент",
+  "language": "uk",
+  "version": "2.0.0",
+  "model": "aiva_ukrainian_wakeword.tflite",
+  "probability_cutoff": 0.96,
+  "sliding_window_average_size": 3,
+  "metrics": {
+    "model_size_bytes": 62304,
+    "cutoff_0.99": {
+      "frr": 0.1733,
+      "faph": 0.562
+    },
+    "cutoff_0.98": {
+      "frr": 0.1400,
+      "faph": 0.937
+    },
+    "cutoff_0.96": {
+      "frr": 0.1333,
+      "faph": 1.312
+    },
+    "cutoff_0.95": {
+      "frr": 0.1067,
+      "faph": 2.000
+    }
+  },
+  "feature_extractor": {
+    "sample_rate": 16000,
+    "window_size_ms": 30,
+    "window_step_ms": 10,
+    "feature_bin_count": 40
+  }
+}
