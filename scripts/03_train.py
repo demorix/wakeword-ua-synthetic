@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Етап 4: Тренування моделі microWakeWord.
+Step 4: Train microWakeWord model.
 
-Запуск (з ua_wakeword/):
+Usage (from ua_wakeword/):
   source env-mww/bin/activate
   python scripts/03_train.py --word "агент" --samples-dir generated_samples/styletts2
 
-Конфігурація: відповідає basic_training_notebook.ipynb від kahrendt/microWakeWord
+Configuration: matches basic_training_notebook.ipynb from kahrendt/microWakeWord
 """
 
 import argparse
@@ -34,23 +34,23 @@ aug_dir = Path(args.aug_dir)
 output_dir = Path(args.output_dir)
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# Перевірки
+# Validation checks
 n_samples = len(list(samples_dir.glob("*.wav")))
 if n_samples < 10:
-    print(f"[ERROR] Знайдено лише {n_samples} семплів у {samples_dir}")
-    print("Спочатку запустіть: python scripts/01_generate_samples.py")
+    print(f"[ERROR] Only {n_samples} samples found in {samples_dir}")
+    print("Run first: python scripts/01_generate_samples.py")
     sys.exit(1)
 
-print(f"[INFO] Знайдено {n_samples} позитивних семплів")
+print(f"[INFO] Found {n_samples} positive samples")
 print(f"[INFO] Wake word: '{args.word}'")
-print(f"[INFO] Вихід: {output_dir}")
+print(f"[INFO] Output: {output_dir}")
 
-# ── Налаштування ───────────────────────────────────────────────────────────────
+# ── Setup ──────────────────────────────────────────────────────────────────────
 import numpy as np
 import tensorflow as tf
 print(f"[INFO] TensorFlow: {tf.__version__}")
 
-# Перевіряємо GPU
+# Check GPU availability
 gpus = tf.config.list_physical_devices('GPU')
 print(f"[INFO] GPU: {gpus if gpus else 'CPU only'}")
 
@@ -58,12 +58,12 @@ import microwakeword
 from microwakeword.data_processor import DataProcessor
 from microwakeword import train as mww_train
 
-# ── Конфігурація (взята з basic_training_notebook.ipynb) ──────────────────────
+# ── Configuration (from basic_training_notebook.ipynb) ────────────────────────
 config = {
     "target_word": args.word,
     "batch_size": args.batch_size,
     "steps": args.steps,
-    "spectrogram_length": 198,        # кількість 10ms фреймів (~2 сек)
+    "spectrogram_length": 198,        # number of 10ms frames (~2 sec)
     "time_shift_ms": 100,
     "sample_rate": 16000,
     "clip_duration_ms": 1980,
@@ -72,7 +72,7 @@ config = {
     "feature_bin_count": 40,          # 40-feature melspectrogram
     "learning_rate_step_boundaries": [10000, 15000, 18000],
     "learning_rate_schedule_values": [0.001, 0.0005, 0.0002, 0.0001],
-    "positive_class_weight": 25,      # важливо для рідкого класу
+    "positive_class_weight": 25,      # important for rare class
     "data": {
         "wanted_words": [args.word],
         "positive": str(samples_dir.resolve()),
@@ -87,13 +87,13 @@ config = {
     },
 }
 
-# Зберігаємо конфіг для відтворюваності
+# Save config for reproducibility
 config_path = output_dir / "training_config.yaml"
 with open(config_path, "w") as f:
     yaml.dump(config, f, allow_unicode=True)
-print(f"[INFO] Конфіг збережено: {config_path}")
+print(f"[INFO] Config saved: {config_path}")
 
-# ── Augmentation конфіг ────────────────────────────────────────────────────────
+# ── Augmentation config ────────────────────────────────────────────────────────
 augmentation_config = {
     "rirs_dir": config["data"]["rirs"],
     "noise_dir": config["data"]["noise"],
@@ -105,11 +105,11 @@ augmentation_config = {
     "max_snr_db": 20,
 }
 
-# ── Дані ───────────────────────────────────────────────────────────────────────
-print("\n[INFO] Ініціалізація DataProcessor...")
+# ── Data ───────────────────────────────────────────────────────────────────────
+print("\n[INFO] Initializing DataProcessor...")
 data_processor = DataProcessor(config)
 
-print("[INFO] Формування тренувального сету...")
+print("[INFO] Building training set...")
 train_fingerprints, train_ground_truth, _ = data_processor.get_data(
     "training",
     batch_size=config["batch_size"],
@@ -126,15 +126,15 @@ val_fingerprints, val_ground_truth, _ = data_processor.get_data(
 )
 print(f"  val:   {val_fingerprints.shape}")
 
-# ── Модель ─────────────────────────────────────────────────────────────────────
-print("\n[INFO] Будую модель...")
+# ── Model ──────────────────────────────────────────────────────────────────────
+print("\n[INFO] Building model...")
 from microwakeword.model import MicroWakeWordModel
 
 model = MicroWakeWordModel(config).get_model()
 model.summary()
 
-# ── Тренування ─────────────────────────────────────────────────────────────────
-print(f"\n[INFO] Тренування ({args.steps} кроків)...")
+# ── Training ───────────────────────────────────────────────────────────────────
+print(f"\n[INFO] Training ({args.steps} steps)...")
 history = mww_train.train(
     config=config,
     data_processor=data_processor,
@@ -144,14 +144,14 @@ history = mww_train.train(
     augmentation_config=augmentation_config,
 )
 
-# ── Збереження ─────────────────────────────────────────────────────────────────
+# ── Save ───────────────────────────────────────────────────────────────────────
 model_safe_name = args.word.replace(" ", "_")
 saved_model_path = output_dir / f"{model_safe_name}_model"
 model.save(str(saved_model_path))
-print(f"\n[INFO] Модель збережена: {saved_model_path}")
+print(f"\n[INFO] Model saved: {saved_model_path}")
 
-# ── Конвертація в TFLite ───────────────────────────────────────────────────────
-print("[INFO] Конвертація в TFLite (INT8 quantization)...")
+# ── Convert to TFLite ──────────────────────────────────────────────────────────
+print("[INFO] Converting to TFLite (INT8 quantization)...")
 from microwakeword import model_conversion
 
 tflite_path = output_dir / f"{model_safe_name}.tflite"
@@ -163,6 +163,5 @@ model_conversion.convert_to_tflite(
 )
 
 tflite_size = tflite_path.stat().st_size / 1024
-print(f"[DONE] TFLite модель: {tflite_path} ({tflite_size:.1f} KB)")
-print(f"[DONE] Готово! Скопіюйте {tflite_path} на Raspberry Pi.")
-
+print(f"[DONE] TFLite model: {tflite_path} ({tflite_size:.1f} KB)")
+print(f"[DONE] Done! Copy {tflite_path} to your Raspberry Pi.")

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Етап 4: Тренування та квантизація моделі microWakeWord (streaming MixedNet).
+Step 4: Train and quantize a microWakeWord model (streaming MixedNet).
 
-Використовує офіційний модуль `microwakeword.model_train_eval` з конфігурацією:
-- MixedNet (MixConv) архітектура, адаптована для потокового інференсу на пристроях
-- 10 000 кроків тренування
-- Автоматичний вибір кращих ваг (best_weights)
-- Автоматична квантизація INT8 у streaming TFLite формат
+Uses the official `microwakeword.model_train_eval` module with configuration:
+- MixedNet (MixConv) architecture adapted for streaming inference on devices
+- 10,000 training steps
+- Automatic best-weights selection
+- Automatic INT8 quantization to streaming TFLite format
 
-Запуск:
+Usage:
   source env-mww/bin/activate
   python scripts/04_train_model.py
 """
@@ -89,8 +89,8 @@ config_file = "training_parameters.yaml"
 with open(config_file, "w") as f:
     yaml.dump(config, f)
 
-print(f"[INFO] Створено конфігураційний файл {config_file}")
-print("[INFO] Запуск офіційного циклу тренування microWakeWord...")
+print(f"[INFO] Created configuration file: {config_file}")
+print("[INFO] Starting official microWakeWord training loop...")
 
 cmd = [
     sys.executable,
@@ -118,17 +118,16 @@ cmd = [
 print(f"[CMD] {' '.join(cmd)}")
 res = subprocess.run(cmd)
 if res.returncode != 0:
-    print(f"[ERROR] Тренування завершилось з кодом {res.returncode}")
+    print(f"[ERROR] Training finished with exit code {res.returncode}")
     sys.exit(res.returncode)
 
-print("\n[SUCCESS] Тренування та квантизація завершені!")
-print(f"Результати у: {train_dir.resolve()}")
+print("\n[SUCCESS] Training and quantization complete!")
+print(f"Results saved to: {train_dir.resolve()}")
 
-# Копіюємо на фінальне стандартизоване місце
+# Copy to final standardized location
 src_tflite = train_dir / "tflite_stream_state_internal_quant" / "stream_state_internal_quant.tflite"
 dst_tflite = Path("trained_models/aiva_ukrainian_wakeword.tflite")
 if src_tflite.exists():
     import shutil
     shutil.copy2(src_tflite, dst_tflite)
-    print(f"[EXPORT] Модель успішно скопійована в {dst_tflite} ({dst_tflite.stat().st_size / 1024:.1f} KB)")
-
+    print(f"[EXPORT] Model successfully copied to {dst_tflite} ({dst_tflite.stat().st_size / 1024:.1f} KB)")

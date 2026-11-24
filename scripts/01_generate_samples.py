@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Етап 2: Генерація wake word семплів через StyleTTS2 Ukrainian (multispeaker).
+Step 2: Generate wake word samples via StyleTTS2 Ukrainian (multispeaker).
 
 API: model.tokenizer.encode(ipa_text) → tokens
      model(tokens, speed=speed, s_prev=style_tensor) → wav (24kHz)
 
-Запуск (з кореневої директорії ua_wakeword):
+Usage (from ua_wakeword root directory):
   source styletts2-ukrainian/env-tts/bin/activate
   python scripts/01_generate_samples.py --word "агент" --count 1500 --out generated_samples/styletts2
 """
@@ -20,7 +20,7 @@ import subprocess
 from pathlib import Path
 from unicodedata import normalize
 
-# ── Автоматичне перемикання на venv StyleTTS2, якщо torch відсутній ───────────
+# ── Auto-switch to StyleTTS2 venv if torch is not available ───────────────────
 try:
     import torch
     import numpy as np
@@ -32,15 +32,15 @@ except ModuleNotFoundError:
     ]
     tts_python = next((p for p in candidate_venvs if p.exists()), None)
     if tts_python and sys.executable != str(tts_python):
-        print(f"[INFO] Torch не знайдено в поточному середовищі. Автоматично перемикаюсь на {tts_python}...")
+        print(f"[INFO] Torch not found in current environment. Auto-switching to {tts_python}...")
         res = subprocess.run([str(tts_python), *sys.argv])
         sys.exit(res.returncode)
     else:
-        print("[ERROR] Не знайдено модуль 'torch'. Будь ласка, активуйте середовище StyleTTS2:")
+        print("[ERROR] Module 'torch' not found. Please activate the StyleTTS2 environment:")
         print("  source styletts2-ukrainian/env-tts/bin/activate")
         sys.exit(1)
 
-# ── Аргументи ──────────────────────────────────────────────────────────────────
+# ── Arguments ─────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="StyleTTS2 wake word batch generator")
 parser.add_argument("--word", type=str, required=True,
                     help="Wake word text (e.g. 'агент' or 'окей агент')")
@@ -59,25 +59,25 @@ parser.add_argument("--speed-range", type=float, nargs=2, default=[0.85, 1.15],
                     help="Speed variation range (default: 0.85 1.15)")
 parser.add_argument("--no-verbalize", "--no-verbalization", "--disable-verbalization",
                     dest="verbalize", action="store_false", default=True,
-                    help="Вимкнути вербалізацію тексту (за замовчуванням увімкнено)")
+                    help="Disable text verbalization (enabled by default)")
 parser.add_argument("--verbalize", dest="verbalize", action="store_true",
-                    help="Увімкнути вербалізацію тексту")
+                    help="Enable text verbalization")
 parser.add_argument("--seed", type=int, default=42)
 args = parser.parse_args()
 
 random.seed(args.seed)
 torch.manual_seed(args.seed)
 
-# ── Додаємо styletts2-ukrainian до шляху ───────────────────────────────────────
+# ── Add styletts2-ukrainian to path ───────────────────────────────────────────
 sys.path.insert(0, args.styletts2_dir)
 
-# ── Імпорт моделі та залежностей ───────────────────────────────────────────────
+# ── Import model and dependencies ─────────────────────────────────────────────
 try:
     from styletts2_inference.models import StyleTTS2
     from ipa_uk import ipa
     import stanza
 
-    # Stanza NLP форсуємо на CPU (уникаємо cuDNN RNN проблем на sm_121)
+    # Force Stanza NLP to CPU (avoid cuDNN RNN issues on sm_121)
     _orig_stanza_pipeline = stanza.Pipeline
     def _cpu_stanza_pipeline(*a, **kw):
         kw["device"] = "cpu"
@@ -86,22 +86,22 @@ try:
 
     from ukrainian_word_stress import Stressifier, StressSymbol
 except ImportError as e:
-    print(f"[ERROR] Не вдалося імпортувати залежності StyleTTS2: {e}")
-    print("Переконайтесь, що активовано venv: source styletts2-ukrainian/env-tts/bin/activate")
+    print(f"[ERROR] Failed to import StyleTTS2 dependencies: {e}")
+    print("Make sure the venv is activated: source styletts2-ukrainian/env-tts/bin/activate")
     sys.exit(1)
 
 try:
     import soundfile as sf
     import resampy
 except ImportError:
-    print("[ERROR] Потрібно: pip install soundfile resampy  (в env-tts)")
+    print("[ERROR] Required: pip install soundfile resampy  (in env-tts)")
     sys.exit(1)
 
-# ── Ініціалізація ──────────────────────────────────────────────────────────────
+# ── Initialization ────────────────────────────────────────────────────────────
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"[INFO] Пристрій: {device}")
+print(f"[INFO] Device: {device}")
 
-print("[INFO] Завантаження StyleTTS2 multispeaker моделі...")
+print("[INFO] Loading StyleTTS2 multispeaker model...")
 model = StyleTTS2(hf_path="patriotyk/styletts2_ukrainian_multispeaker", device=device)
 
 stressify = Stressifier()
@@ -110,20 +110,20 @@ verbalizer = None
 if args.verbalize:
     try:
         from verbalizer import Verbalizer
-        print("[INFO] Ініціалізація Verbalizer (вербалізація увімкнена)...")
+        print("[INFO] Initializing Verbalizer (verbalization enabled)...")
         verbalizer = Verbalizer()
     except Exception as e:
-        print(f"[WARN] Не вдалося ініціалізувати Verbalizer ({e}), продовжую без вербалізації.")
+        print(f"[WARN] Failed to initialize Verbalizer ({e}), continuing without verbalization.")
 else:
-    print("[INFO] Вербалізацію вимкнено користувачем (--no-verbalize).")
+    print("[INFO] Verbalization disabled by user (--no-verbalize).")
 
-# ── Завантаження голосів ───────────────────────────────────────────────────────
+# ── Load voice embeddings ──────────────────────────────────────────────────────
 voice_files = sorted(glob.glob(os.path.join(args.voices_dir, "*.pt")))
 if not voice_files:
-    print(f"[ERROR] Не знайдено .pt голосів у {args.voices_dir}")
+    print(f"[ERROR] No .pt voice files found in {args.voices_dir}")
     sys.exit(1)
 
-print(f"[INFO] Знайдено {len(voice_files)} голосів:")
+print(f"[INFO] Found {len(voice_files)} voices:")
 for v in voice_files:
     print(f"  - {os.path.basename(v)}")
 
@@ -132,7 +132,7 @@ def safe_load_style(path):
     with open(path, "rb") as f:
         header = f.read(20)
     if header.startswith(b"version https://git"):
-        print(f"[WARN] {path} — Git LFS pointer, завантажую з HuggingFace...")
+        print(f"[WARN] {path} — Git LFS pointer, downloading from HuggingFace...")
         from huggingface_hub import hf_hub_download
         import shutil
         rel = os.path.relpath(path, args.styletts2_dir)
@@ -146,7 +146,7 @@ def safe_load_style(path):
         return torch.load(path, map_location=device)
 
 
-print("[INFO] Завантаження стилів голосів...")
+print("[INFO] Loading voice styles...")
 voice_styles = {}
 for vf in voice_files:
     name = Path(vf).stem
@@ -157,14 +157,14 @@ for vf in voice_files:
         print(f"  ✗ {name} — {e}")
 
 if not voice_styles:
-    print("[ERROR] Жоден голос не завантажився.")
+    print("[ERROR] No voice styles loaded successfully.")
     sys.exit(1)
 
 voice_names = list(voice_styles.keys())
 
-# ── Функція підготовки тексту ──────────────────────────────────────────────────
+# ── Text preparation functions ─────────────────────────────────────────────────
 def verbalize_text(text: str) -> str:
-    """Вербалізація чисел, скорочень та символів у слова."""
+    """Verbalize numbers, abbreviations and symbols into words."""
     if not text.strip():
         return text
     try:
@@ -175,11 +175,11 @@ def verbalize_text(text: str) -> str:
                 res.append(verbalizer.process_text(part.strip())[0])
         return " ".join(res)
     except Exception as e:
-        print(f"[WARN] Помилка вербалізації: {e}")
+        print(f"[WARN] Verbalization error: {e}")
         return text
 
 def prepare_text(raw: str, use_verbalize: bool = True) -> str:
-    """Нормалізація → вербалізація (опціонально) → наголоси → IPA транскрипція."""
+    """Normalize → verbalize (optional) → stress → IPA transcription."""
     t = raw.strip()
     if use_verbalize and verbalizer is not None:
         t = verbalize_text(t)
@@ -187,7 +187,7 @@ def prepare_text(raw: str, use_verbalize: bool = True) -> str:
     t = t.replace('"', '')
     t = normalize('NFKC', t)
     t = re.sub(r'[᠆‐‑‒–—―⁻₋−⸺⸻]', '-', t)
-    # Додаємо крапку якщо нема кінцевого розділового знаку
+    # Add a period if no terminal punctuation present
     if t and t[-1] not in '.?!:-':
         t += '.'
     t = re.sub(r' - ', ': ', t)
@@ -195,32 +195,32 @@ def prepare_text(raw: str, use_verbalize: bool = True) -> str:
     ps = ipa(t)
     return ps
 
-# ── Текстові варіації wake word ────────────────────────────────────────────────
+# ── Wake word text variations ──────────────────────────────────────────────────
 raw_word = args.word
-verb_status = "увімкнена" if (args.verbalize and verbalizer is not None) else "вимкнена"
-print(f"[INFO] Підготовка тексту '{raw_word}' (вербалізація: {verb_status})...")
+verb_status = "enabled" if (args.verbalize and verbalizer is not None) else "disabled"
+print(f"[INFO] Preparing text '{raw_word}' (verbalization: {verb_status})...")
 ipa_text = prepare_text(raw_word, use_verbalize=args.verbalize)
-print(f"[INFO] IPA транскрипція: {ipa_text!r}")
+print(f"[INFO] IPA transcription: {ipa_text!r}")
 
 if not ipa_text:
-    print("[ERROR] Порожня IPA транскрипція — перевірте слово.")
+    print("[ERROR] Empty IPA transcription — please check the word.")
     sys.exit(1)
 
 tokens_base = model.tokenizer.encode(ipa_text)
-print(f"[INFO] Токени ({len(tokens_base)}): {tokens_base.tolist()}")
+print(f"[INFO] Tokens ({len(tokens_base)}): {tokens_base.tolist()}")
 
-# ── Вихідна директорія ─────────────────────────────────────────────────────────
+# ── Output directory ───────────────────────────────────────────────────────────
 out_dir = Path(args.out)
 out_dir.mkdir(parents=True, exist_ok=True)
-print(f"[INFO] Вихід: {out_dir}")
+print(f"[INFO] Output: {out_dir}")
 
-# ── Генерація ─────────────────────────────────────────────────────────────────
+# ── Generation ────────────────────────────────────────────────────────────────
 SPEED_MIN, SPEED_MAX = args.speed_range
 total = args.count
 generated = 0
 skipped = 0
 
-print(f"\n[START] Генерую {total} семплів слова '{raw_word}' (speed {SPEED_MIN}–{SPEED_MAX})...\n")
+print(f"\n[START] Generating {total} samples for '{raw_word}' (speed {SPEED_MIN}–{SPEED_MAX})...\n")
 
 for i in range(total):
     voice_name = random.choice(voice_names)
@@ -231,17 +231,17 @@ for i in range(total):
         with torch.no_grad():
             wav = model(tokens_base, speed=speed, s_prev=ref_s)
 
-        # StyleTTS2 повертає 24kHz тензор — конвертуємо в 16kHz mono numpy
+        # StyleTTS2 returns a 24kHz tensor — convert to 16kHz mono numpy
         if isinstance(wav, torch.Tensor):
             wav = wav.cpu().numpy()
         wav = wav.squeeze()
         if wav.ndim > 1:
             wav = wav.mean(axis=0)  # stereo → mono
 
-        # Ресемплінг 24000 → 16000
+        # Resample 24000 → 16000
         wav_16k = resampy.resample(wav.astype(np.float32), 24000, 16000)
 
-        # Нормалізація амплітуди
+        # Amplitude normalization
         peak = np.abs(wav_16k).max()
         if peak > 0:
             wav_16k = wav_16k / peak * 0.9
@@ -257,5 +257,5 @@ for i in range(total):
         skipped += 1
         print(f"  [SKIP #{i}] {voice_name}: {e}")
 
-print(f"\n[DONE] Згенеровано: {generated}, пропущено: {skipped}")
-print(f"Файли у: {out_dir.resolve()}")
+print(f"\n[DONE] Generated: {generated}, skipped: {skipped}")
+print(f"Files saved to: {out_dir.resolve()}")

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Етап 3.5: Генерація та аугментація спектрограм для microWakeWord.
+Step 3.5: Generate and augment spectrograms for microWakeWord.
 
-Бере згенеровані WAV-семпли StyleTTS2, накладає аугментації (реверберацію RIR,
-фоновий шум, фільтри, зміну гучності) та перетворює їх на 40-канальні
-mmap-спектрограми (mmap_ninja), готові для подачі в нейромережу.
+Takes StyleTTS2-generated WAV samples, applies augmentations (RIR reverb,
+background noise, filters, volume changes) and converts them to 40-channel
+mmap spectrograms (mmap_ninja), ready to feed into the neural network.
 
-Запуск:
+Usage:
   source env-mww/bin/activate
   python scripts/03_generate_features.py
 """
@@ -17,7 +17,7 @@ import shutil
 import sys
 from pathlib import Path
 
-# Перевірка наявності потрібних бібліотек
+# Check required libraries are available
 from microwakeword.audio.augmentation import Augmentation
 from microwakeword.audio.clips import Clips
 from microwakeword.audio.spectrograms import SpectrogramGeneration
@@ -42,22 +42,22 @@ fma_dir = aug_base / "fma_16k"
 output_dir = Path(args.output_dir)
 
 if not samples_dir.exists() or len(list(samples_dir.glob("*.wav"))) == 0:
-    print(f"[ERROR] Не знайдено WAV файлів у {samples_dir}")
+    print(f"[ERROR] No WAV files found in {samples_dir}")
     sys.exit(1)
 
 sample_count = len(list(samples_dir.glob("*.wav")))
-print(f"[INFO] Використовуються семпли: {samples_dir} ({sample_count} файлів)")
-print(f"[INFO] RIR імпульси: {rirs_dir} ({len(list(rirs_dir.glob('*.wav')))} файлів)")
-print(f"[INFO] Фоновий шум: {fma_dir} ({len(list(fma_dir.glob('*.wav')))} файлів)")
-print(f"[INFO] Вихідний каталог: {output_dir}")
+print(f"[INFO] Using samples from: {samples_dir} ({sample_count} files)")
+print(f"[INFO] RIR impulses: {rirs_dir} ({len(list(rirs_dir.glob('*.wav')))} files)")
+print(f"[INFO] Background noise: {fma_dir} ({len(list(fma_dir.glob('*.wav')))} files)")
+print(f"[INFO] Output directory: {output_dir}")
 
 if args.overwrite and output_dir.exists():
-    print(f"[INFO] Прапорець --overwrite активний: очищую {output_dir}...")
+    print(f"[INFO] --overwrite flag set: clearing {output_dir}...")
     shutil.rmtree(output_dir)
 
 output_dir.mkdir(parents=True, exist_ok=True)
 
-print("[INFO] Ініціалізація Clips та Augmenter...")
+print("[INFO] Initializing Clips and Augmenter...")
 clips = Clips(
     input_directory=str(samples_dir),
     file_pattern="*.wav",
@@ -72,14 +72,14 @@ augmenter = Augmentation(
     augmentation_probabilities={
         "SevenBandParametricEQ": 0.4,
         "TanhDistortion": 0.2,
-        "PitchShift": 0.6,    # Активно варіюємо висоту голосу (-4..+4 півтонів)
-        "TimeStretch": 0.5,   # Активно варіюємо темп мовлення (0.8..1.25x)
+        "PitchShift": 0.6,    # Actively vary pitch (-4..+4 semitones)
+        "TimeStretch": 0.5,   # Actively vary speech tempo (0.8..1.25x)
         "BandStopFilter": 0.2,
         "AddColorNoise": 0.3,
         "AddBackgroundNoise": 0.8,
         "Gain": 1.0,
         "GainTransition": 0.3,
-        "RIR": 0.8,           # 80% семплів проходять реальну кімнатну реверберацію
+        "RIR": 0.8,           # 80% of samples pass through real room reverb
     },
     impulse_paths=[str(rirs_dir)],
     background_paths=[str(fma_dir)],
@@ -96,10 +96,10 @@ for split in splits:
     mmap_target = split_out_dir / "wakeword_mmap"
 
     if mmap_target.exists():
-        print(f"[INFO] Спектрограми для {split} вже згенеровано — пропускаю")
+        print(f"[INFO] Spectrograms for {split} already generated — skipping")
         continue
 
-    print(f"\n[INFO] Генерація спектрограм для {split}...")
+    print(f"\n[INFO] Generating spectrograms for {split}...")
     if split == "training":
         split_name = "train"
         repetition = 3
@@ -126,7 +126,6 @@ for split in splits:
         batch_size=100,
         verbose=True,
     )
-    print(f"  ✓ {split} збережено в {mmap_target}")
+    print(f"  ✓ {split} saved to {mmap_target}")
 
-print("\n[DONE] Усі позитивні ознаки (спектрограми) згенеровано успішно!")
-
+print("\n[DONE] All positive features (spectrograms) generated successfully!")
